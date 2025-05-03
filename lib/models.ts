@@ -22,6 +22,14 @@ const WorkloadInputSchema = new Schema({
     type: Number,
     required: true,
   },
+  operatingSystem: {
+    type: String,
+    required: true,
+  },
+  gpu: {
+    type: Boolean,
+    required: true,
+  },
   createdAt: {
     type: Date,
     default: Date.now,

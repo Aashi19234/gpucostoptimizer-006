@@ -4,6 +4,8 @@ export interface WorkloadInput {
   datasetSize: number
   region: string
   budget: number
+  operatingSystem: string
+  gpu: boolean
 }
 
 export interface GPUPricing {

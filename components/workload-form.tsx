@@ -1,13 +1,13 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
+import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 import { useRecommendationStore } from "@/lib/store"
 
@@ -16,33 +16,56 @@ export function WorkloadForm() {
   const { setRecommendations, setLoading } = useRecommendationStore()
 
   const [formData, setFormData] = useState({
-    modelType: "",
-    taskType: "training",
-    datasetSize: 50,
-    region: "us-east",
+    country: "",
+    vcpus: 0,
+    ram: 2,
+    pricepermonth: 100,
+    priceperspot: false,
+    region: "",
     budget: 500,
+    operatingSystem: "",
   })
 
-  const handleChange = (field: string, value: string | number) => {
+  const [errors, setErrors] = useState<Record<string, string>>({})
+
+  const handleChange = (field: string, value: string | number | boolean) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
+    setErrors((prev) => ({ ...prev, [field]: "" }))
+  }
+
+  const validate = () => {
+    const newErrors: Record<string, string> = {}
+
+    if (!formData.country) newErrors.country = "Country is required"
+    if (!formData.region) newErrors.region = "Region is required"
+    if (!formData.operatingSystem) newErrors.operatingSystem = "Operating system is required"
+    if (formData.vcpus <= 0) newErrors.vcpus = "vCPUs must be greater than 0"
+    if (!formData.ram || formData.ram < 1) newErrors.ram = "RAM is required"
+    if (!formData.pricepermonth || formData.pricepermonth < 100)
+      newErrors.pricepermonth = "Price per month must be at least $100"
+    if (!formData.budget || formData.budget < 100)
+      newErrors.budget = "Monthly budget must be at least $100"
+    if (formData.priceperspot !== true && formData.priceperspot !== false)
+      newErrors.priceperspot = "Price per spot selection is required"
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
+    if (!validate()) return
+
     try {
       setLoading(true)
       const response = await fetch("/api/recommend", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       })
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch recommendations")
-      }
+      if (!response.ok) throw new Error("Failed to fetch recommendations")
 
       const data = await response.json()
       setRecommendations(data.recommendations)
@@ -52,7 +75,6 @@ export function WorkloadForm() {
         description: `Found ${data.recommendations.length} suitable GPU instances for your workload.`,
       })
     } catch (error) {
-      console.error("Error fetching recommendations:", error)
       toast({
         title: "Error",
         description: "Failed to fetch recommendations. Please try again.",
@@ -71,67 +93,101 @@ export function WorkloadForm() {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
+
+          {/* Country */}
           <div className="space-y-2">
-            <Label htmlFor="modelType">Model Type</Label>
-            <Select value={formData.modelType} onValueChange={(value) => handleChange("modelType", value)} required>
-              <SelectTrigger id="modelType">
-                <SelectValue placeholder="Select model type" />
+            <Label htmlFor="country">Country</Label>
+            <Select value={formData.country} onValueChange={(value) => handleChange("country", value)}>
+              <SelectTrigger id="country">
+                <SelectValue placeholder="Select country" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="llm">Large Language Model (LLM)</SelectItem>
-                <SelectItem value="vision">Computer Vision</SelectItem>
-                <SelectItem value="nlp">Natural Language Processing</SelectItem>
-                <SelectItem value="rl">Reinforcement Learning</SelectItem>
-                <SelectItem value="gan">Generative Models (GAN)</SelectItem>
+                <SelectItem value="India">India</SelectItem>
+                <SelectItem value="USA">USA</SelectItem>
               </SelectContent>
             </Select>
+            {errors.country && <p className="text-sm text-red-500">{errors.country}</p>}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="taskType">Task Type</Label>
-            <Select value={formData.taskType} onValueChange={(value) => handleChange("taskType", value)} required>
-              <SelectTrigger id="taskType">
-                <SelectValue placeholder="Select task type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="training">Training</SelectItem>
-                <SelectItem value="inference">Inference</SelectItem>
-                <SelectItem value="finetuning">Fine-tuning</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex justify-between">
-              <Label htmlFor="datasetSize">Dataset Size (GB)</Label>
-              <span className="text-sm text-gray-500">{formData.datasetSize} GB</span>
-            </div>
-            <Slider
-              id="datasetSize"
-              min={1}
-              max={1000}
-              step={1}
-              value={[formData.datasetSize]}
-              onValueChange={(value) => handleChange("datasetSize", value[0])}
-              className="py-4"
-            />
-          </div>
-
+          {/* Region */}
           <div className="space-y-2">
             <Label htmlFor="region">Region</Label>
-            <Select value={formData.region} onValueChange={(value) => handleChange("region", value)} required>
+            <Select
+              value={formData.region}
+              onValueChange={(value) => handleChange("region", value)}
+              disabled={!formData.country}
+            >
               <SelectTrigger id="region">
                 <SelectValue placeholder="Select region" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="us-east">US East</SelectItem>
-                <SelectItem value="us-west">US West</SelectItem>
-                <SelectItem value="eu-central">EU Central</SelectItem>
-                <SelectItem value="ap-southeast">Asia Pacific</SelectItem>
+                {formData.country === "India" && (
+                  <>
+                    <SelectItem value="noida">Noida</SelectItem>
+                    <SelectItem value="mumbai">Mumbai</SelectItem>
+                  </>
+                )}
+                {formData.country === "USA" && <SelectItem value="atlanta">Atlanta</SelectItem>}
               </SelectContent>
             </Select>
+            {errors.region && <p className="text-sm text-red-500">{errors.region}</p>}
           </div>
 
+          {/* vCPUs */}
+          <div className="space-y-2">
+            <div className="flex justify-between">
+              <Label htmlFor="vcpus">vCPUs</Label>
+              <span className="text-sm text-gray-500">{formData.vcpus}</span>
+            </div>
+            <Slider
+              id="vcpus"
+              min={1}
+              max={1000}
+              step={1}
+              value={[formData.vcpus]}
+              onValueChange={(value) => handleChange("vcpus", value[0])}
+              className="py-4"
+            />
+            {errors.vcpus && <p className="text-sm text-red-500">{errors.vcpus}</p>}
+          </div>
+
+          {/* RAM */}
+          <div className="space-y-2">
+            <div className="flex justify-between">
+              <Label htmlFor="ram">RAM (GB)</Label>
+              <span className="text-sm text-gray-500">{formData.ram} GB</span>
+            </div>
+            <Slider
+              id="ram"
+              min={1}
+              max={10}
+              step={1}
+              value={[Math.log2(formData.ram)]}
+              onValueChange={(value) => handleChange("ram", Math.pow(2, value[0]))}
+              className="py-4"
+            />
+            {errors.ram && <p className="text-sm text-red-500">{errors.ram}</p>}
+          </div>
+
+          {/* Price Per Month */}
+          <div className="space-y-2">
+            <div className="flex justify-between">
+              <Label htmlFor="pricepermonth">Price Per Month ($)</Label>
+              <span className="text-sm text-gray-500">${formData.pricepermonth}</span>
+            </div>
+            <Slider
+              id="pricepermonth"
+              min={100}
+              max={5000}
+              step={50}
+              value={[formData.pricepermonth]}
+              onValueChange={(value) => handleChange("pricepermonth", value[0])}
+              className="py-4"
+            />
+            {errors.pricepermonth && <p className="text-sm text-red-500">{errors.pricepermonth}</p>}
+          </div>
+
+          {/* Monthly Budget */}
           <div className="space-y-2">
             <div className="flex justify-between">
               <Label htmlFor="budget">Monthly Budget ($)</Label>
@@ -146,8 +202,43 @@ export function WorkloadForm() {
               onValueChange={(value) => handleChange("budget", value[0])}
               className="py-4"
             />
+            {errors.budget && <p className="text-sm text-red-500">{errors.budget}</p>}
           </div>
 
+          {/* Operating System */}
+          <div className="space-y-2">
+            <Label htmlFor="operatingSystem">Operating System</Label>
+            <Select
+              value={formData.operatingSystem}
+              onValueChange={(value) => handleChange("operatingSystem", value)}
+            >
+              <SelectTrigger id="operatingSystem">
+                <SelectValue placeholder="Select operating system" />
+              </SelectTrigger>
+              <SelectContent>
+                
+                <SelectItem value="linux">Linux</SelectItem>
+                <SelectItem value="windows">Windows</SelectItem>
+                
+              </SelectContent>
+            </Select>
+            {errors.operatingSystem && <p className="text-sm text-red-500">{errors.operatingSystem}</p>}
+          </div>
+
+          {/* Price Per Spot */}
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="priceperspot"
+                checked={formData.priceperspot}
+                onCheckedChange={(checked) => handleChange("priceperspot", !!checked)}
+              />
+              <Label htmlFor="priceperspot" className="mb-0">Price Per Spot</Label>
+            </div>
+            {errors.priceperspot && <p className="text-sm text-red-500">{errors.priceperspot}</p>}
+          </div>
+
+          {/* Submit */}
           <Button type="submit" className="w-full">
             Get Recommendations
           </Button>
@@ -156,3 +247,5 @@ export function WorkloadForm() {
     </Card>
   )
 }
+
+
